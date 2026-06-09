@@ -23,10 +23,11 @@ import { generateReport } from "./tools/generate-report.js";
 import { multiSiteDashboard } from "./tools/multi-site-dashboard.js";
 import { submitUrl, submitBatch } from "./tools/submit-url.js";
 import { submitSitemap, listSitemaps } from "./tools/submit-sitemap.js";
+import { pagespeedAnalyze, pagespeedBulkCheck, pagespeedCoreWebVitals } from "./tools/pagespeed-insights.js";
 
 const server = new McpServer({
-  name: "gsc-mcp",
-  version: "2.1.0",
+  name: "99minds-gsc-mcp",
+  version: "2.3.0",
 });
 
 // 1. Quick Wins
@@ -372,10 +373,60 @@ server.tool(
   }
 );
 
+// 21. PageSpeed Analyze
+server.tool(
+  "pagespeed_analyze",
+  "Run a PageSpeed Insights audit on a URL for mobile, desktop, or both. Returns performance score, Core Web Vitals (LCP, CLS, TBT, FCP, TTFB, TTI), real-world field data, and improvement opportunities. Requires PAGESPEED_API_KEY env var." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+  {
+    url: z.string().describe("The full URL to audit (e.g. https://99minds.io/blog/loyalty-programs)"),
+    strategy: z.enum(["mobile", "desktop", "both"]).default("both").describe("Device strategy to test"),
+  },
+  async ({ url, strategy }) => {
+    const results = await pagespeedAnalyze(url, strategy);
+    const wrapped = withMeta(results, "pagespeed_analyze", { url, strategy });
+    return {
+      content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
+    };
+  }
+);
+
+// 22. PageSpeed Bulk Check
+server.tool(
+  "pagespeed_bulk_check",
+  "Check PageSpeed scores for multiple URLs in one call. Returns a summary table with score, grade, LCP, CLS, and TBT for each URL. Use to compare blog posts or landing pages side by side. Requires PAGESPEED_API_KEY env var." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+  {
+    urls: z.array(z.string()).describe("List of full URLs to check (max 10 recommended to stay within API quota)"),
+    strategy: z.enum(["mobile", "desktop"]).default("mobile").describe("Device strategy to test"),
+  },
+  async ({ urls, strategy }) => {
+    const results = await pagespeedBulkCheck(urls, strategy);
+    const wrapped = withMeta(results, "pagespeed_bulk_check", { urls, strategy });
+    return {
+      content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
+    };
+  }
+);
+
+// 23. PageSpeed Core Web Vitals
+server.tool(
+  "pagespeed_core_web_vitals",
+  "Deep-dive Core Web Vitals analysis for a URL — both mobile and desktop. Returns a side-by-side comparison table, real-world CrUX field data, and top 5 actionable opportunities with estimated time savings. Use before publishing or after a site change. Requires PAGESPEED_API_KEY env var." + GUARDRAIL_SUFFIX + VISUAL_SUFFIX,
+  {
+    url: z.string().describe("The full URL to analyse"),
+  },
+  async ({ url }) => {
+    const results = await pagespeedCoreWebVitals(url);
+    const wrapped = withMeta(results, "pagespeed_core_web_vitals", { url });
+    return {
+      content: [{ type: "text", text: JSON.stringify(wrapped, null, 2) }],
+    };
+  }
+);
+
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("GSC MCP server v2.1.0 running on stdio");
+  console.error("99minds GSC MCP server v2.3.0 running on stdio");
 }
 
 main().catch((error) => {
